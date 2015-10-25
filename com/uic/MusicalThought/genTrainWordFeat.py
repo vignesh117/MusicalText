@@ -36,9 +36,14 @@ for i in range(len(theWords)):
     # the class of the previous word is // or / correspondingly
     if curr_word == '/' or curr_word == '//':
         theClasses[ i - 1] = curr_word
+        wordFeatures = getWordFeatures(curr_word)
+        curr_word = curr_word.lower()
+        curr_word = curr_word.replace('.','').replace(',','').replace('\n','')
+        wordFeatures = wordFeatures + ' ' + curr_word
+        theFeatures[ i] = wordFeatures
         theClasses[ i] = 'None'
 
-    elif '/' in curr_word:
+    elif curr_word != '/' and '/' in curr_word:
 
         # Replace / with ''
         curr_word = curr_word.replace('/', '')
@@ -50,7 +55,7 @@ for i in range(len(theWords)):
         theFeatures[ i] = wordFeatures
         theClasses[ i] = '/' #Marking the class for the current word as /
 
-    elif '//' in curr_word:
+    elif curr_word != '//' and '//' in curr_word:
 
         # Replace // with ''
         curr_word = curr_word.replace('/', '')
