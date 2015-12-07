@@ -2,6 +2,9 @@ __author__ = 'vignesh'
 
 from nltk.tokenize import sent_tokenize
 from Sentence import Sentence
+from nltk.tag.stanford import StanfordNERTagger
+from jsonrpc import *
+import ConfigParser as CP
 
 """
 This class contains the entire corpora.
@@ -35,12 +38,30 @@ class TrainDocument(object):
         :return: None
         """
 
+        # Create parameters for NER and Dependency Parsing a
+        # and pass it to the sentence objcet
+
+        # set config file
+        config = CP.RawConfigParser()
+        config = config
+        config.read('config.cfg')
+         # Server for dependency parsing
+        server = ServerProxy(JsonRpc20(),TransportTcpIp(addr=("127.0.0.1", 8080)))
+
+        # Parameters for Named entitye recognition
+
+        # get the classifier and tagger location from config file
+        tagger = config.get('NER','tagger') # gets the path of the stanford tagger
+        classifier = config.get('NER','classifier') # gets the path of the stanford classifier
+        st = StanfordNERTagger(classifier,tagger)
+
+
         if self.document == None:
             return
 
         sent = sent_tokenize(self.document) # contains raw sentences
         for i in range(len(sent)):
-            s = Sentence(sent[i],i)
+            s = Sentence(sent[i],i, server, st) # We also pass the server object and nertagger
             self.sentences.append(s)
 
 

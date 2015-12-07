@@ -15,11 +15,12 @@ if __name__ == '__main__':
 
     doc = TrainDocument(content)
     sent = doc.get_sentences()[0]
+    print sent.pos_tags
     pickle.dump(doc,open('TrainDoc.pickle','w'))
     pickle.dump(doc.sentences,open('Sentences.pickle','w'))
 
-    # Open test documents as wel
+    # # Open test documents as wel
     testfile = config.get('init', 'testfile')
     testcontent = open(testfile).read()
     testdoc = TestDocument(testcontent)
-    pickle.dump(doc.sentences, open('SentencesTest.pickle','w'))
+    pickle.dump(testdoc.sentences, open('SentencesTest.pickle','w'))
