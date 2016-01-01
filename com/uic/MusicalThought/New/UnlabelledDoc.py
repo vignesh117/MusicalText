@@ -11,18 +11,17 @@ This class contains the entire corpora.
 
 """
 
-class TrainDocument(object):
+class UnlabelledDoc(object):
     """
     Each document contains a bunch of sentences
     """
-
-
     document = None # it is the raw text
     sentences = []
 
     def __init__(self, doc):
         self.document = doc
         self.make_sentences()
+        self.sentences = self.sentences[:3000]
 
     def get_sentences(self):
         return self.sentences
@@ -61,5 +60,6 @@ class TrainDocument(object):
 
         sent = sent_tokenize(self.document) # contains raw sentences
         for i in range(len(sent)):
-            s = Sentence(sent[i],i, server, st) # We also pass the server object and nertagger
+            s = Sentence(sent[i],i, server, st,type = 'unlabelled') # We also pass the server object and nertagger
             self.sentences.append(s)
+

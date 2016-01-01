@@ -50,11 +50,11 @@ class TestDocument(object):
         # set config file
         config = CP.RawConfigParser()
         config = config
-        config.read('config.cfg')
+        config.read('config.py')
 
         # Server for dependency parsing
 
-        server = ServerProxy(JsonRpc20(),TransportTcpIp(addr=("127.0.0.1", 8080)))
+        server = ServerProxy(JsonRpc20(),TransportTcpIp(addr=("127.0.0.1", 8080), timeout=200.0))
 
         # Parameters for Named entitye recognition
 

@@ -48,7 +48,6 @@ def get_docx_text(path):
             paragraphs.append(''.join(texts))
 
     return '\n\n'.join(paragraphs)
-    
 corpusdir = 'fromSahisnu/'
 files = os.listdir(corpusdir)
 resultdir = 'processed/'
@@ -114,11 +113,6 @@ for f in os.listdir(resultdir):
 	allcontents.append(content)
 	
 completetxt = '\n'.join(allcontents)
-outfile = open('allcorpuses.txt','w')
+outfile = open('allcorpuses.txt', 'w')
 outfile.write(completetxt)
 outfile.close()
-	
-
-		
-		
-		

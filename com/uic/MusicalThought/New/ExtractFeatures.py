@@ -1,8 +1,11 @@
+# coding=utf-8
 __author__ = 'vignesh'
 import ConfigParser as cp
 from Sentence import Sentence
 import pickle
 import nltk
+from nltk.tokenize import word_tokenize
+from collections import OrderedDict
 
 
 class ExtractFeatures(object):
@@ -12,12 +15,15 @@ class ExtractFeatures(object):
     """
     # Parsing configuration files
     config = cp.RawConfigParser()
-    config.read('config.cfg')
+    config.read('config.py')
 
     # Other declarations
     sentences = None
+    sentencestest = None
+    sentencesunlabelled = None
     features = None  # Dictionary of features for all sentences
     featurestest = None
+    featuresunlabelled = None
 
     # variables for translatoin
     transwordsuni = []
@@ -30,23 +36,36 @@ class ExtractFeatures(object):
     conjwordstri = []
     traindata = None  # Dictionary of traindata Containing X and Y
 
+    # variables for temporal words
+    tempwordsuni = []
+    tempwordsbi = []
+    tempwordstri = []
+
+
     # Example words
     exwords = ["like", "viz", "ie", "eg", 'for example', 'for instance', 'an example']
-
-
 
     def __init__(self):
         self.sentences = pickle.load(open('Sentences.pickle'))
         self.sentencestest = pickle.load(open('SentencesTest.pickle'))
+        self.sentencesunlabelled = pickle.load(open('SentencesUnlabelled.pickle'))
         self.get_transition_words()
         self.get_conjunctions()
+        self.get_temporal_words()
         self.compile_feature_vector()
 
         # Serialize feature
         pickle.dump(self.features, open('features.pickle', 'w'))
         pickle.dump(self.featurestest, open('featuresTest.pickle', 'w'))
+        pickle.dump(self.featuresunlabelled, open('featuresUnlabelled.pickle', 'w'))
 
     def get_transition_words(self):
+
+        """
+        Gets the list of transition words from the
+        transition words dictionary file
+        :return:
+        """
         transfile = self.config.get('init', 'transwordsfile')
         alltransitions = open(transfile).readlines()
         transwordsuni = []
@@ -95,6 +114,35 @@ class ExtractFeatures(object):
         self.conjwordstri = [x.lower() for x in conjwordstri]  # converting to lower case
         self.conjwordsuni.append('and')
 
+    def get_temporal_words(self):
+        """
+        Gets the list of temporal words
+        :return:
+        """
+
+        tempwordlistfile = self.config.get('init', 'templistfile')
+        allwords = open(tempwordlistfile).readlines()
+        tempwordsuni = []
+        tempwordsbi = []
+        tempwordstri = []
+
+        # Unigram transition words
+        for t in allwords:
+            t = t.strip(' \r\n')
+            splitt = t.split(' ')
+
+            if len(splitt) == 1:
+                tempwordsuni.append(t)
+            elif len(splitt) == 2:
+                tempwordsbi.append(t)
+            elif len(splitt) == 3:
+                tempwordstri.append(t)
+
+        # Assign it back to the class
+        self.tempwordsuni = [x.lower() for x in tempwordsuni]  # converting to lower case
+        self.tempwordsbi = [x.lower() for x in tempwordsbi]  # converting to lower case
+        self.tempwordstri = [x.lower() for x in tempwordstri]  # converting to lower case
+
     def ft_foll_by_conj(self, sent, pos):
         if sent == '':
             return [0]
@@ -119,10 +167,8 @@ class ExtractFeatures(object):
         except IndexError:
             return [0]
 
-
         if precuni.lower() in self.conjwordsuni:
             unifeat = 1
-
 
         # bigrams before candidate position
         tokens = nltk.word_tokenize(s)
@@ -131,7 +177,6 @@ class ExtractFeatures(object):
             precbi = bigrams[0]
             if precbi in self.conjwordsbi:
                 bifeat = 1
-
 
         # trigrams before candidate position
         trigrams = [" ".join(tri) for tri in nltk.trigrams(tokens)]
@@ -495,6 +540,7 @@ class ExtractFeatures(object):
             feat = 0
 
         return [feat]
+
     def ft_prec_by_ne(self, sentob, pos):
 
 
@@ -699,18 +745,22 @@ class ExtractFeatures(object):
 
 
         # remove punctuations
+        #punctuations = [',','//','/','?','.','!','"', '(', ')','\'', '[', ']', ':']
         punctuations = [',','//','/','?','.','!','"','\'']
+
 
         for p in punctuations:
             sbefore = sbefore.replace(p,'')
             safter = safter.replace(p,'')
 
         # unigrams before candidate position
-        unigramsbf = sbefore.split(' ')
+       # unigramsbf = sbefore.split(' ')
+        unigramsbf = word_tokenize(sbefore)
         unigramsbf = [x for x in unigramsbf if x != '']
 
         # unigrams after candidate position
-        unigramsaf = safter.split(' ')
+        #unigramsaf = safter.split(' ')
+        unigramsaf = word_tokenize(safter)
         unigramsaf = [x for x in unigramsaf if x != '']
 
         # checking for Noun and Noun form
@@ -761,7 +811,6 @@ class ExtractFeatures(object):
         for p in punctoremove:
             sbfore = sbfore.replace(p,'')
         punctuations = [',','?','!']
-        
         # unigrams before candidate position
         unigramsbf = sbfore.split(' ')
         unigramsbf = [x for x in unigramsbf if x != '']
@@ -898,34 +947,243 @@ class ExtractFeatures(object):
         except IndexError:
             return [0]
 
-    
+    def ft_temp_connec_in_sent(self,sent,pos):
+        """
+        There is likely a pause if there is a temporal
+        connective in the sentence after the pause
+        :param sent: Entire sentence under consideration
+        :param pos: current marker position
+        :return:
+        """
+
+        # Initialization
+        unifeat = 0
+        bifeat = 0
+        trifeat = 0
+
+        if sent == '':
+            return [0]
+
+        s = sent[pos:]  # sentence before the candidate position
+        punctuations = [',','//','/','?','.','!']
+
+        for p in punctuations: # remove all punctuations
+            s = s.replace(p,'')
+
+        # Go through the list of temporal connectives and check if any of the connectives
+        # is present in the words that follow
+        # unigrams before candidate position
+        unigrams = s.split(' ')
+        unigrams = [x for x in unigrams if x != '']
+        try:
+            precuni = unigrams[0]  # unigram before the candidate position
+        except IndexError:
+            return [0]
+
+        if precuni.lower() in self.tempwordsuni:
+            unifeat = 1
+
+
+        # bigrams after candidate position
+        tokens = nltk.word_tokenize(s)
+        bigrams = [" ".join(pair) for pair in nltk.bigrams(tokens)]
+        bigrams = [x for x in bigrams if x != '']
+        if bigrams != []:
+            precbi = bigrams[0]
+            if precbi.lower() in self.tempwordsbi:
+                bifeat = 1
+
+
+        # trigrams after candidate position
+        trigrams = [" ".join(tri) for tri in nltk.trigrams(tokens)]
+        trigrams = [x for x in trigrams if x != '']
+
+        if trigrams != []:
+            prectri = trigrams[0]
+
+            if prectri.lower() in self.tempwordstri:
+                trifeat = 1
+
+        return [int(any([unifeat, bifeat, trifeat]))]
+
+    def ft_junction_of_dep_facts(self, ss, pos):
+
+        """
+        when there is two facts in the sentence dependent on
+        each other……generally such sentence starts with WH-word
+        and composed of two clauses
+
+        We look for the following
+        1. 'When' as the start of the sentence
+        2. look for the nsub dependency immediately after the position
+        3. nsub dependency before the position
+
+        :param ss: sentence object
+        :param pos:
+        :return:
+        """
+
+        sent = ss.orig_sent
+        feat = 0
+        sbfore = sent[:pos]  # sentence before the candidate position
+        safter = sent[pos:]
+
+        # remove all the punctuations
+        punctuations = [',', '//', '/', '?', '.', '!', '"', '\'']
+        for p in punctuations:
+            sbfore = sbfore.replace(p, '')
+            safter = safter.replace(p, '')
+
+        sbfore = nltk.word_tokenize(sbfore)
+        safter = nltk.word_tokenize(safter)
+
+        # Check if the starting of the sentence is 'When'
+
+        try:
+
+            if sbfore[0].strip(' ').lower() != 'when':
+                return [0]
+
+            # Extract the 'nsubj' dependencies
+            dependencies = ss.deps # Dependencies for the given sentence
+            if dependencies == []:
+                return [0]
+            nsubjdep = [ x for x in dependencies if 'nsubj' in x[0]]
+
+            # Check if the word next to the marker is part of the nsubj dependency
+            wordaftermarker = safter[0]
+            wordbeforemarker = sbfore[-1]
+            tempflag = 0
+            tempflat2 = 0
+            for d in nsubjdep:
+                # typcially the word after marker is noun or pronoun and appears in 2 pos in
+                # the dependencies
+                if d[2] == wordaftermarker:
+                    tempflag = 1
+
+                if d[1] == wordbeforemarker:
+                    tempflat2 = 1
+
+            feat = tempflag & tempflat2 # only if both the dependencies are present, the flag is set
+
+            return [feat]
+        except IndexError:
+            return [0]
+
+
+        # check if the word before the marker is part of the nsubj dependency
+
+    def ft_foll_by_sent(self, ss, pos):
+
+        """
+        Check if the string after the marker position is a
+        sentence in itself
+        :param ss: Sentence object
+        :param pos: potential marker position
+        :return:
+        """
+
+        feat = 0
+        sent = ss.orig_sent
+        safter = sent[pos:]
+
+        # remove all the punctuations
+        punctuations = [',', '//', '/', '?', '.', '!', '"', '\'']
+        for p in punctuations:
+            safter = safter.replace(p, '')
+
+        safter = nltk.word_tokenize(safter)
+
+        # Check if the starting of the sentence is 'When'
+
+        try:
+            # Extract the 'nsubj' dependencies
+            dependencies = ss.deps  # Dependencies for the given sentence
+            if dependencies == []:
+                return [0]
+            nsubjdep = [x for x in dependencies if 'nsubj' in x[0]]
+
+            # Check if the word next to the marker is part of the nsubj dependency
+            wordaftermarker = safter[0]
+            for d in nsubjdep:
+                # typcially the word after marker is noun or pronoun and appears in 2 pos in
+                # the dependencies
+                if d[2] == wordaftermarker:
+                    feat = 1
+
+            return [feat]
+        except IndexError:
+            return [0]
+
+    def ft_junction_of_inf_stmts(self, ss, pos):
+
+        """
+        We need to see an if word in the string before the marker
+        and the string after the marker should be a sentence in its own
+        :param ss: sentence object
+        :param pos: marker position
+        :return:
+        """
+
+        sent = ss.orig_sent
+        feat = 0
+        sbfore = sent[:pos]  # sentence before the candidate position
+        safter = sent[pos:]
+
+        # remove all the punctuations
+        punctuations = [',', '//', '/', '?', '.', '!', '"', '\'']
+        for p in punctuations:
+            sbfore = sbfore.replace(p, '')
+            safter = safter.replace(p, '')
+
+        sbfore = nltk.word_tokenize(sbfore)
+        safter = nltk.word_tokenize(safter)
+
+        # Check if the starting of the sentence is 'When'
+        try:
+
+            if 'if' not in sbfore:
+                return [0]
+
+            # Extract the 'nsubj' dependencies
+            dependencies = ss.deps  # Dependencies for the given sentence
+            if dependencies == []:
+                return [0]
+            nsubjdep = [x for x in dependencies if 'nsubj' in x[0]]
+
+            # Check if the word next to the marker is part of the nsubj dependency
+            wordaftermarker = safter[0]
+            for d in nsubjdep:
+                # typcially the word after marker is noun or pronoun and appears in 2 pos in
+                # the dependencies
+                if d[2] == wordaftermarker:
+                    feat = 1
+
+            return [feat]
+        except IndexError:
+            return [0]
+
     def compile_feature_vector(self):
 
         # Run through all the sentences
+        all_features = OrderedDict()
+        all_featurestest = OrderedDict()
+        all_featuresunlabelled = OrderedDict()
 
-        all_features = {}
-        all_featurestest = {}
-
-        # Compiling features for the training sentences
+        #Compiling features for the training sentences
         #for ss in self.sentences:
         for k in range(len(self.sentences)):
             ss = self.sentences[k]
 
-
-            # TODO this is wrong : this does it for orig sentence
             s = ss.ann_sent
             candidatepos = ss.candidatepos
             # remove punctuations - handle it inside the function
             # s = s.replace(',', '')
 
             # for every position run grab the features
-
             features_for_sent = []
 
-
             # Find the features for every candidate position
-
-
             for p in range(len(candidatepos)):
                 i = candidatepos[p]
                 features_for_pos = []
@@ -952,13 +1210,13 @@ class ExtractFeatures(object):
                 features_for_pos += self.ft_foll_by_exwords(s,i)
                 features_for_pos += self.ft_prec_by_exwords(s,i)
                 features_for_pos += self.ft_set_of_all_trans(s,i)
-
-
-
+                features_for_pos += self.ft_temp_connec_in_sent(s,i)
+                features_for_pos += self.ft_junction_of_dep_facts(ss, i)
+                features_for_pos += self.ft_foll_by_sent(ss, i)
+                features_for_pos += self.ft_junction_of_inf_stmts(ss, i)
 
                 features_for_sent.append(features_for_pos)
             all_features[ss] = features_for_sent
-
 
         # Compiling features for the testing sequences sentences
         #for ss in self.sentencestest:
@@ -1003,35 +1261,95 @@ class ExtractFeatures(object):
                 #features_for_pos += self.ft_prec_by_ne(ss,i)
                 #features_for_pos += self.ft_foll_by_ne(ss,i)
                 features_for_pos += self.ft_nndepthat(ss,i)
-
                 features_for_pos += self.ft_vbdepthat(ss,i)
                 features_for_pos += self.ft_nounandnoun(ss,i)
                 features_for_pos += self.ft_prec_by_punc(s,i)
                 features_for_pos += self.ft_foll_by_exwords(s,i)
                 features_for_pos += self.ft_prec_by_exwords(s,i)
                 features_for_pos += self.ft_set_of_all_trans(s,i)
-
+                features_for_pos += self.ft_temp_connec_in_sent(s,i)
+                features_for_pos += self.ft_junction_of_dep_facts(ss, i)
+                features_for_pos += self.ft_foll_by_sent(ss, i)
+                features_for_pos += self.ft_junction_of_inf_stmts(ss, i)
                 features_for_sent.append(features_for_pos)
             all_featurestest[ss] = features_for_sent
 
-            # for i in range(len(words)):
-            #     features_for_pos = []
-            #
-            #     # Run it through all the functions that
-            #     # compute featurs before the candidate position
-            #
-            #     features_for_pos += self.ft_prec_by_transword(s, i)
-            #     features_for_pos += self.ft_wh_word(s, i)
-            #     features_for_pos += self.ft_foll_by_transword(s,i)
-            #     features_for_pos += self.ft_rep_words(s, i)
-            #
-            #     features_for_sent.append(features_for_pos)
-            # all_features[ss] = features_for_sent
+        # Compiling features for the unlabelled sequences sentences
+        #for ss in self.sentencestest:
+
+        if self.config.get('LU','lu').strip(' ') == 1:
+            for k in range(len(self.sentencesunlabelled)):
+                ss = self.sentencesunlabelled[k]
+
+                s = ss.orig_sent
+                candidatepos = ss.candidatepos
+                print 'Candidate positions for unlabelled'
+                print candidatepos
+
+                # remove punctuations
+                s = s.replace(',', '')
+
+                # split and merge to get candidate positions
+                words = s.split(' ')
+
+                # for every position run grab the features
+
+                features_for_sent = []
+
+
+                # Find the features for every candidate position
+
+
+                for p in range(len(candidatepos)):
+                    i = candidatepos[p]
+                    features_for_pos = []
+
+                    # Run it through all the functions that
+                    # compute featurs before the candidate position
+
+                    features_for_pos += self.ft_prec_by_transword(s, i)
+                    features_for_pos += self.ft_wh_word(s, i)
+                    features_for_pos += self.ft_foll_by_transword(s, i)
+
+                    features_for_pos += self.ft_rep_words(s, i)
+                    features_for_pos += self.ft_end_of_sent(s,i)
+                    features_for_pos += self.ft_beg_of_sent(s,i)
+                    features_for_pos += self.ft_foll_by_conj(s,i)
+
+                    #features_for_pos += self.ft_prec_by_ne(ss,i)
+                    #features_for_pos += self.ft_foll_by_ne(ss,i)
+                    features_for_pos += self.ft_nndepthat(ss,i)
+                    features_for_pos += self.ft_vbdepthat(ss,i)
+                    features_for_pos += self.ft_nounandnoun(ss,i)
+                    features_for_pos += self.ft_prec_by_punc(s,i)
+                    features_for_pos += self.ft_foll_by_exwords(s,i)
+                    features_for_pos += self.ft_prec_by_exwords(s,i)
+                    features_for_pos += self.ft_set_of_all_trans(s,i)
+                    features_for_pos += self.ft_temp_connec_in_sent(s,i)
+                    features_for_pos += self.ft_junction_of_dep_facts(ss, i)
+                    features_for_pos += self.ft_foll_by_sent(ss, i)
+                    features_for_pos += self.ft_junction_of_inf_stmts(ss, i)
+                    features_for_sent.append(features_for_pos)
+                all_featuresunlabelled[ss] = features_for_sent
+                # for i in range(len(words)):
+                #     features_for_pos = []
+                #
+                #     # Run it through all the functions that
+                #     # compute featurs before the candidate position
+                #
+                #     features_for_pos += self.ft_prec_by_transword(s, i)
+                #     features_for_pos += self.ft_wh_word(s, i)
+                #     features_for_pos += self.ft_foll_by_transword(s,i)
+                #     features_for_pos += self.ft_rep_words(s, i)
+                #
+                #     features_for_sent.append(features_for_pos)
+                # all_features[ss] = features_for_sent
 
         # TODO length of features for every pos is diff, fix that
 
         self.features = all_features
         self.featurestest = all_featurestest
+        self.featuresunlabelled = all_featuresunlabelled
 
         # print 'FEatures for training set'
         # print all_features
@@ -1046,42 +1364,23 @@ if __name__ == '__main__':
 
     feat_train = ef.features
     feat_test = ef.featurestest
-
-
+    feat_unlabelled = ef.featuresunlabelled
     print ' /n /n '
     print '======================'
-
     print 'Printing feature stats fot train'
     keys = feat_train.keys()
     for i in range(len(keys)):
         print keys[i].orig_sent
         print len(feat_train[keys[i]])
-
-
-
     print '======================'
     print 'Printing feature stats fot test'
     keys = feat_test.keys()
     for i in range(len(keys)):
         print keys[i].orig_sent
-        print len(feat_test[keys[i]])
-
-
-    # print ef.ft_prec_by_transword(sent,len(sent) - 15)
-    # print ef.ft_prec_by_transword(sent2, 6)
-    # print ef.ft_prec_by_transword(senttri,12)
-    # #
-    # # # testing followed by trans features
-    # #
-    # # print ef.ft_foll_by_transword(sent,7)
-    # # print ef.ft_foll_by_transword(sent2, 5)
-    # #
-    # # # testing wh features
-    # #
-    # # s = 'He was really rich while he was in the Alaska'
-    # # print ef.ft_wh_word(s,5)
-    #
-    # print ef.ft_end_of_sent(sent,len(sent))
-
-    # s = Sentence(sent,0)
-    # print ef.ft_prec_by_ne(s, 10)
+        print feat_test[keys[i]]
+    print '======================'
+    print 'Printing feature stats fot unlabelled'
+    keys = feat_unlabelled.keys()
+    for i in range(len(keys)):
+        print keys[i].orig_sent
+        print feat_unlabelled[keys[i]]

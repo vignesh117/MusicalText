@@ -10,6 +10,11 @@ from json import loads
 import re
 from nltk.tag.stanford import StanfordNERTagger
 import ConfigParser as CP
+
+# Setting for handling the unicode issue
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
 #-----------------------------------------
 
 class Sentence(object):
@@ -25,13 +30,13 @@ class Sentence(object):
     #word_pos = None
     labels = None # Class labels
     candidatepos = [] # Candidate positions in the sentence
-    type = 'train' # Tells if the sentence is a training or testing sentence
+    type = 'train' # Tells if the sentence is a training or testing sentence or unlabelled
     config = None
 
     # set config file
     config = CP.RawConfigParser()
     config = config
-    config.read('config.cfg')
+    config.read('config.py')
 
     # Dependency parsing server
     server = None
@@ -47,7 +52,6 @@ class Sentence(object):
 
         # Curate annotated sentence
         sent = sent.strip(" \n\r")
-        print sent
         self.type = type
         self.ann_sent = sent
         self.ann_sent = sent
@@ -55,12 +59,10 @@ class Sentence(object):
         self.st = st
         self.set_orig_sent()
         self.set_pos_tags()
-        #self.set_dep()
+        self.set_dep()
         #self.set_ner()
         #self.set_candidate_pos()
         self.set_class_labels()
-
-
 
     def set_orig_sent(self):
 
@@ -103,18 +105,22 @@ class Sentence(object):
         #TODO: Check if we need to create a word object and store dependencies
         server = self.server
         s = self.orig_sent # Getting
+        print s
         try:
             result = loads(server.parse(s)) # This generates the dependencies
         except RPCInternalError:
             raise 'Corenlp server is not available'
             return
         dependencies = []
-        sentences = result['sentences']
-        for i in range(len(sentences)):
-            dep = result['sentences'][i]['dependencies'] # Get the dependencies from the json
-            dependencies += dep
+        try:
+            sentences = result['sentences']
+            for i in range(len(sentences)):
+                dep = result['sentences'][i]['dependencies'] # Get the dependencies from the json
+                dependencies += dep
 
-        self.deps = dependencies
+            self.deps = dependencies
+        except KeyError: # happens when the sentence is sometimes too long
+            self.deps = []
 
     def set_ner(self):
 
@@ -157,122 +163,134 @@ class Sentence(object):
         # if self.type == 'test': # We just have to set the candidate positions
         #
         #     self.candidatepostest = [m.start() for m in re.finditer(" ", self.orig_sent)]
-        labels = []
-        
-        # find positions of each marker
-        markerpositions = {}
-        reversedict = {}
-        exclusionlist = []
-        sent = self.ann_sent
-
-        markers0 = [' // ','// ']
-        
-        for ma in markers0:
-            numpos = 4
-            positions = [m.start() for m in re.finditer(ma, sent)]
-            expositions = [range(x, x+numpos) for x in positions] # Positions that need to be excluded
-            expositions = sum(expositions, [])
-
-            # Filter all postions beyond sen len
-            expositions = [x for x in expositions if x <= len(sent)]
-            exclusionlist += expositions
-            #markerpositions[ma] = [m.start() for m in re.finditer(ma, sent)]
-            markerpositions['//'] = positions
-
-        
-        markers1 = [' / ']
-        numpos = 3
-        for ma in markers1:
-
-            positions = [m.start() for m in re.finditer(ma, sent)]
-            positions = [x for x in positions if x not in exclusionlist]
-            expositions = [range(x, x+numpos) for x in positions] # Positions that need to be excluded
-            expositions = sum(expositions, [])
-
-            # Filter all postions beyond sen len
-            expositions = [x for x in expositions if x <= len(sent)]
-            exclusionlist += expositions
-            #markerpositions[ma] = [m.start() for m in re.finditer(ma, sent)]
-            markerpositions['/'] = positions
 
 
-        markers2 = [' ']
-        for ma in markers2:
-            positions = [m.start() for m in re.finditer(ma, sent)]
-            positions = [x for x in positions if x not in exclusionlist]
-            markerpositions[ma] = positions
+        # If the sentence is of type unlabelled, then we just have to set the class labels as -1
 
-        # Create an inverse dict
-        for k in markerpositions.keys():
-            ind = markerpositions[k]
-            ind  = sorted(ind)
-            for i in ind:
+        # U N L A B E L L E D
+        if self.type.lower() == 'unlabelled':
+            sent = self.ann_sent
+            positions = [m.start() for m in re.finditer(' ', sent)]
+            positions = sorted(positions)
+            labels = [-1 for i in range(len(positions))]
+            self.labels = labels
+            self.candidatepos = positions
+            return
 
-                reversedict[i] = k
+        else:
 
-                # # handling conflicts between / and //
-                # if k == '//' and reversedict.get(i) == '/':
-                #     reversedict[i] = k
-                # elif k == '/' and reversedict.get(i) == '//':
-                #     continue
-                # elif k == '/' and reversedict.get(i-1) == '/':
-                #     reversedict[i-1] = '//'
-                #     continue
-                #
-                # elif k == '/' and reversedict.get(i+1) == '/':
-                #     reversedict[i] = '//'
-                #     continue
-                #
-                # else:
-                #     reversedict[i] = k
+            # L A B E L L E D
+            labels = []
 
-		print sent
+            # find positions of each marker
+            markerpositions = {}
+            reversedict = {}
+            exclusionlist = []
+            sent = self.ann_sent
 
-     # Convert marker positions to classlables
-        invKeysSorted = sorted(reversedict.keys())
-        for i in range(len(invKeysSorted)):
+            markers0 = [' // ','// ']
 
-            l = reversedict[invKeysSorted[i]]
-            if l == ' ':
-                labels.append('NM')
-            else:
-                labels.append(l)
+            for ma in markers0:
+                numpos = 4
+                positions = [m.start() for m in re.finditer(ma, sent)]
+                expositions = [range(x, x+numpos) for x in positions] # Positions that need to be excluded
+                expositions = sum(expositions, [])
 
-        if 0 not in invKeysSorted:
-            invKeysSorted.append(0)
-            labels = ['NM'] + labels
-
-        if len(sent) not in invKeysSorted:
-            invKeysSorted.append(len(sent))
-            labels = labels + ['NM']
-
-        invKeysSorted = sorted(invKeysSorted)
-        self.labels = labels # labels for candidate positions
-        self.candidatepos = invKeysSorted # Candidate key positions
-        
-        for zipped in zip(invKeysSorted, labels):
-			print zipped
+                # Filter all postions beyond sen len
+                expositions = [x for x in expositions if x <= len(sent)]
+                exclusionlist += expositions
+                #markerpositions[ma] = [m.start() for m in re.finditer(ma, sent)]
+                markerpositions['//'] = positions
 
 
-        # tokens = word_tokenize(self.ann_sent)
-        # tokens = [x.strip(' ') for x in tokens]
-        #
-        #  # First token could be contain a  marker or be a marker
-        # if '/' not in tokens[0] or '//' not in tokens[0]:
-        #     labels.append('NM')
-        #
-        #
-        # for t in tokens:
-        #     if '/' in t or '//' in t:
-        #         labels.append(t)
-        #
-        # # Last token could be contain marker
-        # if '/' not in tokens[-1] or '//' not in tokens[-1] :
-        #     labels.append('NM')
-        #
-        # self.labels = labels
+            markers1 = [' / ']
+            numpos = 3
+            for ma in markers1:
+
+                positions = [m.start() for m in re.finditer(ma, sent)]
+                positions = [x for x in positions if x not in exclusionlist]
+                expositions = [range(x, x+numpos) for x in positions] # Positions that need to be excluded
+                expositions = sum(expositions, [])
+
+                # Filter all postions beyond sen len
+                expositions = [x for x in expositions if x <= len(sent)]
+                exclusionlist += expositions
+                #markerpositions[ma] = [m.start() for m in re.finditer(ma, sent)]
+                markerpositions['/'] = positions
 
 
+            markers2 = [' ']
+            for ma in markers2:
+                positions = [m.start() for m in re.finditer(ma, sent)]
+                positions = [x for x in positions if x not in exclusionlist]
+                markerpositions[ma] = positions
+
+            # Create an inverse dict
+            for k in markerpositions.keys():
+                ind = markerpositions[k]
+                ind  = sorted(ind)
+                for i in ind:
+
+                    reversedict[i] = k
+
+                    # # handling conflicts between / and //
+                    # if k == '//' and reversedict.get(i) == '/':
+                    #     reversedict[i] = k
+                    # elif k == '/' and reversedict.get(i) == '//':
+                    #     continue
+                    # elif k == '/' and reversedict.get(i-1) == '/':
+                    #     reversedict[i-1] = '//'
+                    #     continue
+                    #
+                    # elif k == '/' and reversedict.get(i+1) == '/':
+                    #     reversedict[i] = '//'
+                    #     continue
+                    #
+                    # else:
+                    #     reversedict[i] = k
 
 
+            invKeysSorted = sorted(reversedict.keys())
+            # Convert marker positions to class lables
+            for i in range(len(invKeysSorted)):
+
+                l = reversedict[invKeysSorted[i]]
+                if l == ' ':
+                    labels.append('NM')
+                else:
+                    labels.append(l)
+
+            if 0 not in invKeysSorted:
+                invKeysSorted.append(0)
+                labels = ['NM'] + labels
+
+            if len(sent) not in invKeysSorted:
+                invKeysSorted.append(len(sent))
+                labels = labels + ['NM']
+
+            invKeysSorted = sorted(invKeysSorted)
+            self.labels = labels # labels for candidate positions
+            self.candidatepos = invKeysSorted # Candidate key positions
+            #
+            # for zipped in zip(invKeysSorted, labels):
+                # print zipped
+
+
+            # tokens = word_tokenize(self.ann_sent)
+            # tokens = [x.strip(' ') for x in tokens]
+            #
+            #  # First token could be contain a  marker or be a marker
+            # if '/' not in tokens[0] or '//' not in tokens[0]:
+            #     labels.append('NM')
+            #
+            #
+            # for t in tokens:
+            #     if '/' in t or '//' in t:
+            #         labels.append(t)
+            #
+            # # Last token could be contain marker
+            # if '/' not in tokens[-1] or '//' not in tokens[-1] :
+            #     labels.append('NM')
+            #
+            # self.labels = labels
 
