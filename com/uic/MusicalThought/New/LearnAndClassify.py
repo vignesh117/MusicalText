@@ -16,7 +16,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import accuracy_score
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.feature_selection import SelectKBest, f_regression
+from sklearn import metrics
 from sklearn.metrics import classification_report
+from sklearn.metrics import matthews_corrcoef
 from sklearn.feature_selection import chi2
 from sklearn.cross_validation import train_test_split
 from sklearn.cross_validation import ShuffleSplit
@@ -33,9 +35,20 @@ from sklearn.ensemble import AdaBoostClassifier,BaggingClassifier
 from tabulate import tabulate
 from collections import Counter
 from collections import OrderedDict
+from collections import defaultdict
+from collections import Counter
 from functools import partial
+import re
 import random
 import numpy as np
+
+# For getting balanced accuracy
+from numpy import *
+from pandas import *
+import pandas as pd
+from rpy2.robjects.packages import importr
+import rpy2.robjects as ro
+import pandas.rpy.common as com
 
 class LearnAndClassify(object):
 
@@ -85,6 +98,11 @@ class LearnAndClassify(object):
         self.construct_test_data()
         #self.svm_cv_model()
 
+        # correlation coefficient or feature significance
+        #self.get_featuregroup_significance()
+
+
+        #classification results
         self.cv = self.config.get('CV','cv')
         self.lu = self.config.get('LU','lu')
         if self.cv.strip(' ') == '0':
@@ -96,17 +114,26 @@ class LearnAndClassify(object):
                 self.get_lu_results_on_test()
                 return
 
-            self.create_svm_model()
-            self.create_nb_mode()
-            self.create_rf_model()
-            self.create_lr_model()
+            # self.create_svm_model()
+            # self.create_nb_mode()
+            # self.create_rf_model()
+            # self.create_lr_model()
             self.create_sgd_model()
-            self.create_adaboost_model()
-            self.create_gb_model()
+            # self.create_adaboost_model()
+            # self.create_gb_model()
             # self.create_random_model()
             self.create_dummy_model()
             self.fit_model_on_test()
         else:
+
+            # LU learning with Cross validation
+            if self.lu == '1':
+                self.gen_semisup_data()
+                self.create_LU_model()
+                self.get_lu_results_on_test(cv = 1)
+                return
+
+            type = 'train'
             perclass = self.config.get('CV','perclass')
             featgroupres = self.config.get('CV','featgroupres')
             if perclass.strip(' ') == '1':
@@ -115,12 +142,12 @@ class LearnAndClassify(object):
                     print 'Generating per class CV classification report for feature groups'
                     self.get_cv_perclass_ftgroups_report()
                 else:
-                    print 'Generating per class CV classification report'
-                    self.get_cv_perclass_report()
+                    #print 'Generating per class CV classification report'
+                    self.get_cv_perclass_report(type = type)
             else:
                 print 'Generating CV results for all classes'
                 self.get_cv_results()
-        #self.disp_rand_test_res()
+        self.disp_rand_test_res()
 
     def gen_training_data(self):
         """
@@ -472,71 +499,138 @@ class LearnAndClassify(object):
         # Getting accuracy scores for crossvalidated
         # and train test paradigms based on the setting
 
-        ypred_svm = self.model.predict(self.testdata['X'])
-        ypred_rf = self.modelrf.predict(self.testdata['X'])
-        ypred_lr = self.modellr.predict(self.testdata['X'])
-        ypred_gb = self.modelgb.predict(self.testdata['X'])
-        ypred_ada = self.modelada.predict(self.testdata['X'])
+        # ypred_svm = self.model.predict(self.testdata['X'])
+        # ypred_rf = self.modelrf.predict(self.testdata['X'])
+        # ypred_lr = self.modellr.predict(self.testdata['X'])
+        # ypred_gb = self.modelgb.predict(self.testdata['X'])
+        # ypred_ada = self.modelada.predict(self.testdata['X'])
         ypred_sgd = self.modelsgd.predict(self.testdata['X'])
-        ypred_nb = self.modelnb.predict(self.testdata['X'])
+        # ypred_nb = self.modelnb.predict(self.testdata['X'])
         ypred_random = self.modelrandom.predict(self.testdata['X'])
 
 
-        print ' Accuracy scores'
-        print 'SVM with class balance score'
-        ac_svm =  accuracy_score(self.testdata['Y'], ypred_svm)
+        # print ' Accuracy scores'
+        # print 'SVM with class balance score'
+        # ac_svm =  accuracy_score(self.testdata['Y'], ypred_svm)
+        #
+        # print 'Random forest score'
+        # ac_rf =  accuracy_score(ypred_rf, self.testdata['Y'])
+        #
+        # print 'Logistic regression score'
+        # ac_lr =  accuracy_score(self.testdata['Y'], ypred_lr)
+        #
+        # print 'Gradient Boosting score'
+        # ac_gb =  accuracy_score(self.testdata['Y'], ypred_gb)
+        #
+        # print 'Ada Boosting score'
+        # ac_ada =  accuracy_score(self.testdata['Y'], ypred_ada)
+        #
+        # print 'SGD model score'
+        # ac_sgd =  accuracy_score(self.testdata['Y'], ypred_sgd)
+        #
+        # print 'Multinomial NB Accuracy score '
+        # ac_nb =  accuracy_score(self.testdata['Y'], ypred_nb)
+        #
+        # print 'Random model Accuracy score'
+        # ac_rand = accuracy_score(self.testdata['Y'], ypred_random)
 
-        print 'Random forest score'
-        ac_rf =  accuracy_score(ypred_rf, self.testdata['Y'])
-
-        print 'Logistic regression score'
-        ac_lr =  accuracy_score(self.testdata['Y'], ypred_lr)
-
-        print 'Gradient Boosting score'
-        ac_gb =  accuracy_score(self.testdata['Y'], ypred_gb)
-
-        print 'Ada Boosting score'
-        ac_ada =  accuracy_score(self.testdata['Y'], ypred_ada)
-
-        print 'SGD model score'
-        ac_sgd =  accuracy_score(self.testdata['Y'], ypred_sgd)
-
-        print 'Multinomial NB Accuracy score '
-        ac_nb =  accuracy_score(self.testdata['Y'], ypred_nb)
-
-        print 'Random model Accuracy score'
-        ac_rand = accuracy_score(self.testdata['Y'], ypred_random)
-
-        accuracies = [ac_svm, ac_rf, ac_lr, ac_gb, ac_ada, ac_sgd, ac_nb]
+        #accuracies = [ac_svm, ac_rf, ac_lr, ac_gb, ac_ada, ac_sgd, ac_nb]
 
          # Classification report on all the classifiers
 
 
-        target_names = ['/','//','NM']
+        #target_names = ['/','//','NM']
 
-        print 'Classification report for SVM'
-        print classification_report(self.testdata['Y'], ypred_svm, target_names=target_names)
+        # print 'Classification report for SVM'
+        # print classification_report(self.testdata['Y'], ypred_svm, target_names=target_names)
+        #
+        # print 'Classification report for random forest'
+        # print classification_report(self.testdata['Y'], ypred_rf, target_names=target_names)
+        #
+        # print 'Classification report for Logistic regression model'
+        # print classification_report(self.testdata['Y'], ypred_lr)
+        #
+        # print 'Classification report for Gradient Boosting model'
+        # print classification_report(self.testdata['Y'], ypred_gb)
+        #
+        # print 'Classification report for Ada Boosting model'
+        # print classification_report(self.testdata['Y'], ypred_ada)
 
-        print 'Classification report for random forest'
-        print classification_report(self.testdata['Y'], ypred_rf, target_names=target_names)
+        # print 'Classification report for Stochastic gradient model'
+        # print classification_report(self.testdata['Y'], ypred_sgd)
+        #
+        # report = classification_report(self.testdata['Y'], ypred_sgd)
+        # results = self.get_results_from_classreport(report)
+        # classlabels = ['/','//','NM']
+        # for l in classlabels:
+        #
+        #     # get the results
+        #     res = results.get(l) # Class specific results
+        #     f1 = res.get('f1')
+        #     print 'F1 for '+l+': ' + str(f1)
+        #
+        #
+        # print '===================================\n'
+        # # get the balanced accuracy
+        # """
+        # We can get balanced accuracy by assuming the
+        # class of interest as positive and the other classes as negative
+        # """
+        # balaccuracies = {}
+        # df = {'ypred' : ypred_sgd, 'y' : self.testdata['Y']}
+        # df = pd.DataFrame(df)
+        # rdf = com.convert_to_r_dataframe(df)
+        # base = importr('base')
+        # caret = importr('caret')
+        # ypredfact = base.factor(rdf[0])
+        # ytruefact = base.factor(rdf[1])
+        # mat = caret.confusionMatrix(ytruefact, ypredfact)
+        # s = com.convert_robj(mat[3])
+        # cc = s['Balanced Accuracy']
+        # cc = dict(cc)
+        # print cc
 
-        print 'Classification report for Logistic regression model'
-        print classification_report(self.testdata['Y'], ypred_lr)
-
-        print 'Classification report for Gradient Boosting model'
-        print classification_report(self.testdata['Y'], ypred_gb)
-
-        print 'Classification report for Ada Boosting model'
-        print classification_report(self.testdata['Y'], ypred_ada)
-
-        print 'Classification report for Stochastic gradient model'
-        print classification_report(self.testdata['Y'], ypred_sgd)
-
-        print 'Classification report for Multinomial naive bayes'
-        print classification_report(self.testdata['Y'], ypred_nb)
-
-        print 'Classification report for Random model'
+        # Classification report for random model
+        print 'Classification report for Random  model'
         print classification_report(self.testdata['Y'], ypred_random)
+
+        report = classification_report(self.testdata['Y'], ypred_random)
+        results = self.get_results_from_classreport(report)
+        classlabels = ['/','//','NM']
+        for l in classlabels:
+
+            # get the results
+            res = results.get(l) # Class specific results
+            f1 = res.get('f1')
+            print 'F1 for '+l+': ' + str(f1)
+
+
+        print '===================================\n'
+        # get the balanced accuracy
+        """
+        We can get balanced accuracy by assuming the
+        class of interest as positive and the other classes as negative
+        """
+        balaccuracies = {}
+        df = {'ypred' : ypred_random, 'y' : self.testdata['Y']}
+        df = pd.DataFrame(df)
+        rdf = com.convert_to_r_dataframe(df)
+        base = importr('base')
+        caret = importr('caret')
+        ypredfact = base.factor(rdf[0])
+        ytruefact = base.factor(rdf[1])
+        mat = caret.confusionMatrix(ytruefact, ypredfact)
+        s = com.convert_robj(mat[3])
+        cc = s['Balanced Accuracy']
+        cc = dict(cc)
+        print cc
+
+
+        # print 'Classification report for Multinomial naive bayes'
+        # print classification_report(self.testdata['Y'], ypred_nb)
+        #
+        # print 'Classification report for Random model'
+        # print classification_report(self.testdata['Y'], ypred_random)
 
 
         #=========================
@@ -545,15 +639,15 @@ class LearnAndClassify(object):
 
         #=======================
 
-        allvotes = [ypred_gb, ypred_lr, ypred_sgd,ypred_nb]
-        combinevotes = zip(*allvotes)
-
-        mode = lambda list : max(set(list), key=list.count)
-        ypred_mvote = [mode(x) for x in combinevotes]
-
-        # find the maximum vote
-        print 'Classification report for maximum vote classifier'
-        print classification_report(self.testdata['Y'], ypred_mvote)
+        # allvotes = [ypred_gb, ypred_lr, ypred_sgd,ypred_nb]
+        # combinevotes = zip(*allvotes)
+        #
+        # mode = lambda list : max(set(list), key=list.count)
+        # ypred_mvote = [mode(x) for x in combinevotes]
+        #
+        # # find the maximum vote
+        # print 'Classification report for maximum vote classifier'
+        # print classification_report(self.testdata['Y'], ypred_mvote)
 
 
         # print 'Classification report for Gradient boosting score'
@@ -562,15 +656,15 @@ class LearnAndClassify(object):
         # Verifying test data consistency
 
       
-        # Final classification report
-        print ypred_svm
-
-        print 'FINAL REPORT'
-
-        ytrue = self.testdata['Y']
-        classifiers = ['SVM', 'RF','LR','GB', 'SGD', 'NB', 'ADA','Vot', 'Random']
-        predictions = [ypred_svm, ypred_rf, ypred_lr, ypred_gb, ypred_sgd, ypred_nb, \
-                       ypred_ada, ypred_mvote, ypred_random]
+        # # Final classification report
+        # print ypred_svm
+        #
+        # print 'FINAL REPORT'
+        #
+        # ytrue = self.testdata['Y']
+        # classifiers = ['SVM', 'RF','LR','GB', 'SGD', 'NB', 'ADA','Vot', 'Random']
+        # predictions = [ypred_svm, ypred_rf, ypred_lr, ypred_gb, ypred_sgd, ypred_nb, \
+        #                ypred_ada, ypred_mvote, ypred_random]
         # resultssvm = precision_recall_fscore_support(ytrue, ypred_svm, average=None, labels = target_names)
         # resultsrf = precision_recall_fscore_support(ytrue, ypred_rf, average=None, labels = target_names)
         # resultslr = precision_recall_fscore_support(ytrue, ypred_lr, average=None, labels = target_names)
@@ -578,43 +672,43 @@ class LearnAndClassify(object):
         # resultssgd = precision_recall_fscore_support(ytrue, ypred_sgd, average=None, labels = target_names)
         # resultsnb = precision_recall_fscore_support(ytrue, ypred_nb, average=None, labels = target_names)
 
-        prdict = {}
-        for i in range(len(classifiers)):
-            classifier = classifiers[i]
-            (TP, FP, TN, FN) = self.perf_measure(ytrue, predictions[i])
-            TP = float(TP)
-            FP = float(FP)
-            TN = float(TN)
-            FN = float(FN)
-
-            # results
-            try:
-                accuracy = (TP + TN ) / (TP + FP + TN + FN)
-            except ZeroDivisionError:
-                accuracy = 0
-            try:
-                recall = (TP) / (TP + FP)
-            except ZeroDivisionError:
-                recall = 0
-            try:
-                prec = (TP) / (TP + FN)
-            except ZeroDivisionError:
-                prec = 0
-            try:
-                bal_acc = ( (0.5 * TP) / (TP + FN) ) + ( (0.5 * TN) / (TN + FP))
-                inf = ( 2 * bal_acc - 1) # 'Informedness'
-            except ZeroDivisionError:
-                bal_acc =0
-                inf = 0
-            resdict = {}
-            resdict['accuracy'] = accuracy
-            resdict['recall'] = recall
-            resdict['precision'] = prec
-            resdict['balaccuracy'] = bal_acc
-            resdict['inf'] = inf
-            prdict[classifier] = resdict
-
-        print tabulate(prdict.items())
+        # prdict = {}
+        # for i in range(len(classifiers)):
+        #     classifier = classifiers[i]
+        #     (TP, FP, TN, FN) = self.perf_measure(ytrue, predictions[i])
+        #     TP = float(TP)
+        #     FP = float(FP)
+        #     TN = float(TN)
+        #     FN = float(FN)
+        #
+        #     # results
+        #     try:
+        #         accuracy = (TP + TN ) / (TP + FP + TN + FN)
+        #     except ZeroDivisionError:
+        #         accuracy = 0
+        #     try:
+        #         recall = (TP) / (TP + FP)
+        #     except ZeroDivisionError:
+        #         recall = 0
+        #     try:
+        #         prec = (TP) / (TP + FN)
+        #     except ZeroDivisionError:
+        #         prec = 0
+        #     try:
+        #         bal_acc = ( (0.5 * TP) / (TP + FN) ) + ( (0.5 * TN) / (TN + FP))
+        #         inf = ( 2 * bal_acc - 1) # 'Informedness'
+        #     except ZeroDivisionError:
+        #         bal_acc =0
+        #         inf = 0
+        #     resdict = {}
+        #     resdict['accuracy'] = accuracy
+        #     resdict['recall'] = recall
+        #     resdict['precision'] = prec
+        #     resdict['balaccuracy'] = bal_acc
+        #     resdict['inf'] = inf
+        #     prdict[classifier] = resdict
+        #
+        # print tabulate(prdict.items())
 
     def average_cv_results(self, cvresults):
 
@@ -814,7 +908,39 @@ class LearnAndClassify(object):
             print '=============='
             print tabulate(average_results.get(k).items())
 
-    def get_cv_perclass_report(self):
+    def get_results_from_classreport(self,report):
+
+        """
+        This functions extracts the precision,
+        recall, fscores from the classification report
+        :param report: Classification report
+        :return:
+        """
+
+        lines = report.split('\n') # Splitting based on line break
+        lines = lines[1:] # skipping the header line
+        lines = [x for x in lines if x != ''] # removing empty
+        lines = lines[:-1] #Last line contains the total result - omitting that
+
+        resultdict = {}
+        for line in lines:
+            dict = {}
+            temp = re.split('\s+',line)
+            temp = [x for x in temp if x != '']
+            f1 = float(temp[-2])
+            recall = float(temp[-3])
+            precision = float(temp[-4])
+            classlabel = temp[0] # First element of the line is class label
+            dict['precision'] = precision
+            dict['recall'] = recall
+            dict['f1'] = f1
+
+            # add dict to the resultdict
+            resultdict[classlabel] = dict
+
+        return resultdict
+
+    def get_cv_perclass_report(self, type = 'train'):
 
          # Logistic regression model
         lr_model=  LogisticRegressionCV(
@@ -862,8 +988,21 @@ class LearnAndClassify(object):
 
 
         # Get train and test data
-        X = self.traindata['X']
-        y = self.traindata['Y']
+
+        if type.lower().strip(' ') == 'train':
+            print 'Generating CV results for labelled data'
+            X = self.traindata['X']
+            y = self.traindata['Y']
+        elif type.lower().strip(' ') == 'lu':
+            print 'Generating CV results for Semisupervised data'
+            X = self.semisupdata['X']
+            y = self.semisupdata['Y']
+                 # Convert the class labels to categorical again
+            labelmap = {}
+            labelmap[0] = '/'
+            labelmap[1] = '//'
+            labelmap[2] = 'NM'
+            y = [labelmap[x] for x in y]
 
         allpredictions = []
         for i in range(len(classifiers)):
@@ -872,12 +1011,40 @@ class LearnAndClassify(object):
             y_pred = cross_val_predict(estimator, X, y, cv=10)
             print 'Generating CV classification report for '+classifiername
             print '-----------------------------------'
-            print classification_report(y, y_pred)
-            print '===================================\n'
+            report = classification_report(y, y_pred)
+            results = self.get_results_from_classreport(report)
 
+            classlabels = ['/','//','NM']
+            for l in classlabels:
+
+                # get the results
+                res = results.get(l) # Class specific results
+                f1 = res.get('f1')
+                print 'F1 for '+l+': ' + str(f1)
+
+
+            print '===================================\n'
+            # get the balanced accuracy
+            """
+            We can get balanced accuracy by assuming the
+            class of interest as positive and the other classes as negative
+            """
+            balaccuracies = {}
+            df = {'ypred' : y_pred, 'y' : y}
+            df = pd.DataFrame(df)
+            rdf = com.convert_to_r_dataframe(df)
+            base = importr('base')
+            caret = importr('caret')
+            ypredfact = base.factor(rdf[0])
+            ytruefact = base.factor(rdf[1])
+            mat = caret.confusionMatrix(ytruefact, ypredfact)
+            s = com.convert_robj(mat[3])
+            cc = s['Balanced Accuracy']
+            cc = dict(cc)
+            print cc
             # Add the predictions to the overall predictions for
             # generating results for the maximum vote classifier
-            allpredictions.append(y_pred)
+            #allpredictions.append(y_pred)
 
         # # Generate results for multivote classification
         # combinevotes = zip(*allpredictions)
@@ -889,56 +1056,58 @@ class LearnAndClassify(object):
 
     def get_cv_perclass_ftgroups_report(self):
           # Logistic regression model
-        lr_model=  LogisticRegressionCV(
-          Cs=50,
-          cv=4,
-          penalty='l2',
-          fit_intercept=True,
-          scoring='f1'
-        )
-
-        #SVM model
-        clf = Pipeline([('chi2', SelectKBest(chi2, k=10)),
-             ('svm', svm.LinearSVC(class_weight='balanced'))])
-        svm_model = OneVsRestClassifier(clf)
-        #svm_model = svm.SVC(kernel = 'rbf')
+        # lr_model=  LogisticRegressionCV(
+        #   Cs=50,
+        #   cv=4,
+        #   penalty='l2',
+        #   fit_intercept=True,
+        #   scoring='f1'
+        # )
+        #
+        # #SVM model
+        # clf = Pipeline([('chi2', SelectKBest(chi2, k=10)),
+        #      ('svm', svm.LinearSVC(class_weight='balanced'))])
+        # svm_model = OneVsRestClassifier(clf)
+        # #svm_model = svm.SVC(kernel = 'rbf')
 
         # Random forest model
-        rf_model = Pipeline([
-            ('feature_selection', SelectFromModel(svm.SVC(C = 1, kernel='linear',probability=False, \
-                                                       class_weight='balanced'))),
-            ('classification', RandomForestClassifier(n_estimators=1000, class_weight='balanced' ))
-            ])
+        # rf_model = Pipeline([
+        #     ('feature_selection', SelectFromModel(svm.SVC(C = 1, kernel='linear',probability=False, \
+        #                                                class_weight='balanced'))),
+        #     ('classification', RandomForestClassifier(n_estimators=1000, class_weight='balanced' ))
+        #     ])
 
-        # Grading Boosted
-        gb_model = GradientBoostingClassifier(n_estimators=1000, learning_rate=0.5,
-                                     max_depth=1, random_state=0, warm_start=True)
+        # # Grading Boosted
+        # gb_model = GradientBoostingClassifier(n_estimators=1000, learning_rate=0.5,
+        #                              max_depth=1, random_state=0, warm_start=True)
         # SGD model
         sgd_model = SGDClassifier(class_weight='balanced')
 
-        # Naive Bayes model
-        mnb = MultinomialNB()
-
-        # Ada boost classifier
-        baseestimator = DecisionTreeClassifier(class_weight='balanced')
-        ada_model = AdaBoostClassifier(base_estimator = baseestimator, n_estimators=100)
-
+        # # Naive Bayes model
+        # mnb = MultinomialNB()
+        #
+        # # Ada boost classifier
+        # baseestimator = DecisionTreeClassifier(class_weight='balanced')
+        # ada_model = AdaBoostClassifier(base_estimator = baseestimator, n_estimators=100)
+        #
         # Random classifier
         random_model = DummyClassifier(strategy='stratified')
 
-        #classifnames = ['LR','SVM', 'RF', 'GB', 'SGD', 'NB', 'ADA', 'Random']
-        #classifiers = [lr_model, svm_model, rf_model, gb_model, sgd_model, mnb, ada_model, random_model]
+        # #classifnames = ['LR','SVM', 'RF', 'GB', 'SGD', 'NB', 'ADA', 'Random']
+        # #classifiers = [lr_model, svm_model, rf_model, gb_model, sgd_model, mnb, ada_model, random_model]
 
-        # reduced classifier list
-        classifnames = ['LR', 'SVM', 'RF', 'MNB','GB','Random']
-        classifiers = [lr_model, svm_model, rf_model, mnb, gb_model, random_model]
+        # # reduced classifier list
+        # classifnames = ['LR', 'SVM', 'RF', 'MNB','GB','Random']
+        # classifiers = [lr_model, svm_model, rf_model, mnb, gb_model, random_model]
 
+        classifnames = ['SGD', 'Random']
+        classifiers = [sgd_model, random_model]
         # Get train and test data
         X = self.traindata['X']
         y = self.traindata['Y']
 
         # Code for feature group
-        groups = ['Linguistic','Word','Grammatical']
+        groups = ['Linguistic','Word','Grammatical', 'LingandWord', 'LingandGram', 'WordandGram', 'All']
         Xlist = []
         getdataforfeat = lambda x,y : [x[i] for i in y] # x is the training example and y is the indices
 
@@ -956,6 +1125,27 @@ class LearnAndClassify(object):
         mapfunc = partial(getdataforfeat, y = self.gramindices)
         Xgram = map(mapfunc, X)
         Xlist.append(Xgram)
+
+        # Linguistic and Word level combination
+        mapfunc = partial(getdataforfeat, y = self.lingindices + self.wlindices)
+        Xlingword = map(mapfunc, X)
+        Xlist.append(Xlingword)
+
+        # Linguistic and Grammaatical combination
+        mapfunc = partial(getdataforfeat, y = self.lingindices + self.gramindices)
+        Xlinggram = map(mapfunc, X)
+        Xlist.append(Xlinggram)
+
+        # Word level and grammatical combination
+        mapfunc = partial(getdataforfeat, y = self.gramindices + self.wlindices)
+        Xwordgram = map(mapfunc, X)
+        Xlist.append(Xwordgram)
+
+        # All features
+
+        mapfunc = partial(getdataforfeat, y = self.gramindices + self.wlindices + self.lingindices)
+        Xall = map(mapfunc, X)
+        Xlist.append(Xall)
 
         # Generate crossvalidated results here
         for i in range(len(groups)):
@@ -976,6 +1166,25 @@ class LearnAndClassify(object):
                 # Add the predictions to the overall predictions for
                 # generating results for the maximum vote classifier
                 allpredictions.append(y_pred)
+                print '===================================\n'
+                # get the balanced accuracy
+                """
+                We can get balanced accuracy by assuming the
+                class of interest as positive and the other classes as negative
+                """
+                balaccuracies = {}
+                df = {'ypred' : y_pred, 'y' : y}
+                df = pd.DataFrame(df)
+                rdf = com.convert_to_r_dataframe(df)
+                base = importr('base')
+                caret = importr('caret')
+                ypredfact = base.factor(rdf[0])
+                ytruefact = base.factor(rdf[1])
+                mat = caret.confusionMatrix(ytruefact, ypredfact)
+                s = com.convert_robj(mat[3])
+                cc = s['Balanced Accuracy']
+                cc = dict(cc)
+                print cc
 
     # Deprecated
     def disp_rand_test_res(self):
@@ -1022,7 +1231,7 @@ class LearnAndClassify(object):
         prdict['Random'] = resdict
         print tabulate(prdict.items())
 
-    def get_lu_results_on_test(self):
+    def get_lu_results_on_test(self, cv = 0):
 
         """
         Get the results of running the LU model
@@ -1034,17 +1243,135 @@ class LearnAndClassify(object):
         testy = self.testdata['Y']
 
         model = self.modellu
-        ypred = model.predict(testx)
 
-        # Convert the class labels to categorical again
-        labelmap = {}
-        labelmap[0] = '/'
-        labelmap[1] = '//'
-        labelmap[2] = 'NM'
-        ypred = [labelmap[x] for x in ypred]
+        if cv == 0:
+            ypred = model.predict(testx)
 
-        print 'Classification report on the LU model with test data'
-        print  classification_report(testy, ypred)
+            # Convert the class labels to categorical again
+            labelmap = {}
+            labelmap[0] = '/'
+            labelmap[1] = '//'
+            labelmap[2] = 'NM'
+            ypred = [labelmap[x] for x in ypred]
+
+            print 'Classification report on the LU model with test data'
+            print  classification_report(testy, ypred)
+
+            report = classification_report(testy, ypred)
+            results = self.get_results_from_classreport(report)
+            classlabels = ['/','//','NM']
+            for l in classlabels:
+
+                # get the results
+                res = results.get(l) # Class specific results
+                f1 = res.get('f1')
+                print 'F1 for '+l+': ' + str(f1)
+
+
+            print '===================================\n'
+            # get the balanced accuracy
+            """
+            We can get balanced accuracy by assuming the
+            class of interest as positive and the other classes as negative
+            """
+            balaccuracies = {}
+            df = {'ypred' : ypred, 'y' : testy}
+            df = pd.DataFrame(df)
+            rdf = com.convert_to_r_dataframe(df)
+            base = importr('base')
+            caret = importr('caret')
+            ypredfact = base.factor(rdf[0])
+            ytruefact = base.factor(rdf[1])
+            mat = caret.confusionMatrix(ytruefact, ypredfact)
+            s = com.convert_robj(mat[3])
+            cc = s['Balanced Accuracy']
+            cc = dict(cc)
+            print cc
+
+
+
+        else:
+            estimator = model
+            classifiername = 'LU'
+            y_pred = cross_val_predict(estimator, self.semisupdata['X'], self.semisupdata['Y'], cv=10)
+            print 'Generating CV classification report for '+classifiername
+            print '-----------------------------------'
+            y = self.semisupdata['Y']
+            report = classification_report(y, y_pred)
+            results = self.get_results_from_classreport(report)
+
+            print list(set(y))
+            #classlabels = ['/','//','NM']
+            classlabels = [0,1,2]
+            for l in classlabels:
+
+                # get the results
+                res = results.get(l) # Class specific results
+                f1 = res.get('f1')
+                print 'F1 for '+l+': ' + str(f1)
+
+
+            print '===================================\n'
+            # get the balanced accuracy
+            """
+            We can get balanced accuracy by assuming the
+            class of interest as positive and the other classes as negative
+            """
+            balaccuracies = {}
+            df = {'ypred' : y_pred, 'y' : testy}
+            df = pd.DataFrame(df)
+            rdf = com.convert_to_r_dataframe(df)
+            base = importr('base')
+            caret = importr('caret')
+            ypredfact = base.factor(rdf[0])
+            ytruefact = base.factor(rdf[1])
+            mat = caret.confusionMatrix(ytruefact, ypredfact)
+            s = com.convert_robj(mat[3])
+            cc = s['Balanced Accuracy']
+            cc = dict(cc)
+            print cc
+
+
+    def get_featuregroup_significance(self):
+
+        """
+        Gives the significance of each feature group
+        with respect to each class label
+        :return:
+        """
+
+        feature_groups = ['l', 'w','g'] # l : linguistic, g : grammatical, w : word
+        classes = ['/','//','NM']
+
+        X = self.traindata['X']
+        Y = self.traindata['Y']
+
+        print Counter(Y)
+        # for each data point,
+        # get the contributions of each feature group
+        contributions = defaultdict(list)
+        for i in range(len(X)):
+            example = X[i]
+            l = any([example[j] for j in self.lingindices])
+            w = any([example[j] for j in self.wlindices])
+            g = any([example[j] for j in self.gramindices])
+            contributions['l'].append(l)
+            contributions['w'].append(w)
+            contributions['g'].append(g)
+
+            # Add the class indicator
+            for c in classes:
+                contributions[c].append(c == Y[i])
+
+        # Now find the correlations
+        for c in classes:
+            for f in feature_groups:
+                print 'Correlations between the class : ' + c +' and feature group ' + f
+                print '----------------------------------------'
+                print matthews_corrcoef(contributions.get(c), contributions.get(f))
+                print '========================================'
+
+
 
 if __name__ == '__main__':
     lc = LearnAndClassify()
