@@ -107,6 +107,9 @@ class LearnAndClassify(object):
         #classification results
         self.cv = self.config.get('CV','cv')
         self.lu = self.config.get('LU','lu')
+        perclass = self.config.get('CV','perclass')
+        featgroupres = self.config.get('CV','featgroupres')
+
         if self.cv.strip(' ') == '0':
             #
             if self.lu.strip(' \r\n') == '1':
@@ -114,6 +117,11 @@ class LearnAndClassify(object):
                 self.create_LU_model()
                 self.get_lu_results_on_test()
                 return
+
+            if perclass ==1:
+                if featgroupres == 1:
+                    self.get_perclass_featgroup_report()
+                    return
 
             self.create_svm_model()
             self.create_nb_mode()
@@ -135,8 +143,6 @@ class LearnAndClassify(object):
                 return
 
             type = 'train'
-            perclass = self.config.get('CV','perclass')
-            featgroupres = self.config.get('CV','featgroupres')
             if perclass.strip(' ') == '1':
 
                 if featgroupres.strip(' ') == '1':
@@ -1220,6 +1226,127 @@ class LearnAndClassify(object):
                 cc = s['Balanced Accuracy']
                 cc = dict(cc)
                 print cc
+
+
+    def get_perclass_featgroup_report(self):
+
+        print 'Generating results for traintest for feature groups'
+        sgd_model = SGDClassifier(class_weight='balanced')
+
+        # # Naive Bayes model
+        # mnb = MultinomialNB()
+        #
+        # # Ada boost classifier
+        # baseestimator = DecisionTreeClassifier(class_weight='balanced')
+        # ada_model = AdaBoostClassifier(base_estimator = baseestimator, n_estimators=100)
+        #
+        # Random classifier
+        random_model = DummyClassifier(strategy='stratified')
+
+        # #classifnames = ['LR','SVM', 'RF', 'GB', 'SGD', 'NB', 'ADA', 'Random']
+        # #classifiers = [lr_model, svm_model, rf_model, gb_model, sgd_model, mnb, ada_model, random_model]
+
+        # # reduced classifier list
+        # classifnames = ['LR', 'SVM', 'RF', 'MNB','GB','Random']
+        # classifiers = [lr_model, svm_model, rf_model, mnb, gb_model, random_model]
+
+        classifnames = ['SGD']
+        classifiers = [sgd_model]
+        # Get train and test data
+        X = self.traindata['X']
+        y = self.traindata['Y']
+
+        # Code for feature group
+        groups = ['Linguistic','Word','Grammatical', 'LingandWord', 'LingandGram', 'WordandGram', 'All']
+        Xlist = []
+
+        def getfeatdata(trainx, indices):
+            temp = []
+            for i in range(len(trainx)):
+                example = trainx[i]
+                temp2 = []
+                for j in range(len(indices)):
+                    temp2.append(example[j])
+                #example = [example[j] for j in range(len(example)) if j in indices]
+                temp.append(temp2)
+            return temp
+
+
+
+        # Linguistic features
+        Xling = getfeatdata(X, self.lingindices)
+        Xlist.append(Xling)
+
+        #Word level features
+        Xword = getfeatdata(X, self.wlindices)
+        Xlist.append(Xword)
+
+        #Grammatical features
+        Xgram = getfeatdata(X, self.gramindices)
+        Xlist.append(Xgram)
+
+        # Linguistic and Word level combination
+        Xlingword = getfeatdata(X, self.lingindices + self.wlindices)
+        Xlist.append(Xlingword)
+
+        # Linguistic and Grammaatical combination
+        Xlinggram = getfeatdata(X, self.lingindices + self.gramindices)
+        Xlist.append(Xlinggram)
+
+        # Word level and grammatical combination
+        Xwordgram = getfeatdata(X, self.gramindices + self.wlindices)
+        Xlist.append(Xwordgram)
+
+        # All features
+
+        Xall = getfeatdata(X, self.gramindices + self.wlindices + self.lingindices)
+        Xlist.append(Xall)
+
+        # Generate traintest results here
+        for i in range(len(groups)):
+
+            X = Xlist[i] # redefining X here for getting
+            print len(X)
+            allpredictions = []
+            print 'Getting results for the ' + groups[i] +' group'
+            for j in range(len(classifiers)):
+                estimator = classifiers[j]
+                classifiername = classifnames[j]
+
+                # fit the classifier
+                model = estimator.fit(X,y)
+                testx = self.testdata['X']
+                testy = self.testdata['Y']
+                y_pred = model.predict(testx)
+
+                print 'Generating CV classification report for '+classifiername
+                print '-----------------------------------'
+                print classification_report(testy, y_pred)
+                print '===================================\n'
+
+                # Add the predictions to the overall predictions for
+                # generating results for the maximum vote classifier
+                allpredictions.append(y_pred)
+                print '===================================\n'
+                # get the balanced accuracy
+                """
+                We can get balanced accuracy by assuming the
+                class of interest as positive and the other classes as negative
+                """
+                balaccuracies = {}
+                df = {'ypred' : y_pred, 'y' : y}
+                df = pd.DataFrame(df)
+                rdf = com.convert_to_r_dataframe(df)
+                base = importr('base')
+                caret = importr('caret')
+                ypredfact = base.factor(rdf[0])
+                ytruefact = base.factor(rdf[1])
+                mat = caret.confusionMatrix(ytruefact, ypredfact)
+                s = com.convert_robj(mat[3])
+                cc = s['Balanced Accuracy']
+                cc = dict(cc)
+                print cc
+
 
     # Deprecated
     def disp_rand_test_res(self):

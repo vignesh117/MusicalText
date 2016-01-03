@@ -810,21 +810,56 @@ class ExtractFeatures(object):
         punctoremove = ['/','//']
         for p in punctoremove:
             sbfore = sbfore.replace(p,'')
-        punctuations = [',','?','!']
+        punctuations = [',','?','!', ':','\'','\"','-','(',')',';']
         # unigrams before candidate position
         unigramsbf = sbfore.split(' ')
         unigramsbf = [x for x in unigramsbf if x != '']
+        featlist = []
 
         try:
             for p in punctuations:
                 if p in unigramsbf[-1]:
+                    featlist.append(1)
                     feat = 1
                 else:
+                    featlist.append(0)
                     continue
         except IndexError:
-            return [0]
+            return [0 for i in range(len(punctuations))]
 
-        return [feat]
+        return featlist
+
+    def ft_foll_by_punc(self, sent, pos):
+		        # Get the sentences before and after the position
+        #sent = sent.split(' ')
+        safter = sent[pos:]  # sentence before the candidate position
+        feat = 0
+
+        # remove class labels
+
+        punctoremove = ['/','//']
+        for p in punctoremove:
+            sbfore = safter.replace(p,'')
+        punctuations = [',','?','!', ':','\'','\"','-','(',')',';']
+        # unigrams before candidate position
+        unigramsaf = safter.split(' ')
+        unigramsaf = [x for x in unigramsaf if x != '']
+
+        featlist = []
+
+        try:
+            for p in punctuations:
+                if p in unigramsaf[0]:
+                    featlist.append(1)
+                    feat = 1
+                else:
+                    featlist.append(0)
+                    continue
+        except IndexError:
+            return [0 for i in range(len(punctuations))]
+
+        return featlist
+
 
     def ft_foll_by_exwords(self, sent, pos):
 
@@ -1101,6 +1136,8 @@ class ExtractFeatures(object):
             dependencies = ss.deps  # Dependencies for the given sentence
             if dependencies == []:
                 return [0]
+            if dependencies == None:
+                return [0]
             nsubjdep = [x for x in dependencies if 'nsubj' in x[0]]
 
             # Check if the word next to the marker is part of the nsubj dependency
@@ -1149,6 +1186,9 @@ class ExtractFeatures(object):
             dependencies = ss.deps  # Dependencies for the given sentence
             if dependencies == []:
                 return [0]
+
+            if dependencies == None:
+                return [0]
             nsubjdep = [x for x in dependencies if 'nsubj' in x[0]]
 
             # Check if the word next to the marker is part of the nsubj dependency
@@ -1191,30 +1231,34 @@ class ExtractFeatures(object):
                 # Run it through all the functions that
                 # compute featurs before the candidate position
 
-                features_for_pos += self.ft_prec_by_transword(s, i)
-                features_for_pos += self.ft_wh_word(s, i)
-                features_for_pos += self.ft_foll_by_transword(s, i)
-
-                features_for_pos += self.ft_rep_words(s, i)
-                features_for_pos += self.ft_end_of_sent(s,i)
+                # Word level features 0 - 21 indices
                 features_for_pos += self.ft_beg_of_sent(s,i)
-                features_for_pos += self.ft_foll_by_conj(s,i)
+                features_for_pos += self.ft_end_of_sent(s,i)
+                features_for_pos += self.ft_prec_by_punc(s,i)
+                features_for_pos += self.ft_foll_by_punc(s,i)
 
-                #features_for_pos += self.ft_prec_by_ne(ss,i)
-                #features_for_pos += self.ft_foll_by_ne(ss,i)
+                # Grammatical features 22 - 27
                 features_for_pos += self.ft_nndepthat(ss,i)
-
                 features_for_pos += self.ft_vbdepthat(ss,i)
                 features_for_pos += self.ft_nounandnoun(ss,i)
-                features_for_pos += self.ft_prec_by_punc(s,i)
-                features_for_pos += self.ft_foll_by_exwords(s,i)
-                features_for_pos += self.ft_prec_by_exwords(s,i)
-                features_for_pos += self.ft_set_of_all_trans(s,i)
-                features_for_pos += self.ft_temp_connec_in_sent(s,i)
                 features_for_pos += self.ft_junction_of_dep_facts(ss, i)
                 features_for_pos += self.ft_foll_by_sent(ss, i)
                 features_for_pos += self.ft_junction_of_inf_stmts(ss, i)
 
+                # Linguistic features 27 - 297
+
+                features_for_pos += self.ft_prec_by_transword(s, i)
+                features_for_pos += self.ft_wh_word(s, i)
+                features_for_pos += self.ft_foll_by_transword(s, i)
+                features_for_pos += self.ft_rep_words(s, i)
+                features_for_pos += self.ft_foll_by_conj(s,i)
+                features_for_pos += self.ft_foll_by_exwords(s,i)
+                features_for_pos += self.ft_prec_by_exwords(s,i)
+                features_for_pos += self.ft_set_of_all_trans(s,i)
+                features_for_pos += self.ft_temp_connec_in_sent(s,i)
+
+                #features_for_pos += self.ft_prec_by_ne(ss,i)
+                #features_for_pos += self.ft_foll_by_ne(ss,i)
                 features_for_sent.append(features_for_pos)
             all_features[ss] = features_for_sent
 
@@ -1248,36 +1292,41 @@ class ExtractFeatures(object):
 
                 # Run it through all the functions that
                 # compute featurs before the candidate position
+                # Word level features 0 - 21 indices
+                features_for_pos += self.ft_beg_of_sent(s,i)
+                features_for_pos += self.ft_end_of_sent(s,i)
+                features_for_pos += self.ft_prec_by_punc(s,i)
+                features_for_pos += self.ft_foll_by_punc(s,i)
+
+                # Grammatical features 22 - 27
+                features_for_pos += self.ft_nndepthat(ss,i)
+                features_for_pos += self.ft_vbdepthat(ss,i)
+                features_for_pos += self.ft_nounandnoun(ss,i)
+                features_for_pos += self.ft_junction_of_dep_facts(ss, i)
+                features_for_pos += self.ft_foll_by_sent(ss, i)
+                features_for_pos += self.ft_junction_of_inf_stmts(ss, i)
+
+                # Linguistic features 27 - 297
 
                 features_for_pos += self.ft_prec_by_transword(s, i)
                 features_for_pos += self.ft_wh_word(s, i)
                 features_for_pos += self.ft_foll_by_transword(s, i)
-
                 features_for_pos += self.ft_rep_words(s, i)
-                features_for_pos += self.ft_end_of_sent(s,i)
-                features_for_pos += self.ft_beg_of_sent(s,i)
                 features_for_pos += self.ft_foll_by_conj(s,i)
-
-                #features_for_pos += self.ft_prec_by_ne(ss,i)
-                #features_for_pos += self.ft_foll_by_ne(ss,i)
-                features_for_pos += self.ft_nndepthat(ss,i)
-                features_for_pos += self.ft_vbdepthat(ss,i)
-                features_for_pos += self.ft_nounandnoun(ss,i)
-                features_for_pos += self.ft_prec_by_punc(s,i)
                 features_for_pos += self.ft_foll_by_exwords(s,i)
                 features_for_pos += self.ft_prec_by_exwords(s,i)
                 features_for_pos += self.ft_set_of_all_trans(s,i)
                 features_for_pos += self.ft_temp_connec_in_sent(s,i)
-                features_for_pos += self.ft_junction_of_dep_facts(ss, i)
-                features_for_pos += self.ft_foll_by_sent(ss, i)
-                features_for_pos += self.ft_junction_of_inf_stmts(ss, i)
+
+                #features_for_pos += self.ft_prec_by_ne(ss,i)
+                #features_for_pos += self.ft_foll_by_ne(ss,i)
                 features_for_sent.append(features_for_pos)
             all_featurestest[ss] = features_for_sent
 
         # Compiling features for the unlabelled sequences sentences
         #for ss in self.sentencestest:
 
-        if self.config.get('LU','lu').strip(' ') == 1:
+        if self.config.get('LU','lu').strip(' ') == '1':
             for k in range(len(self.sentencesunlabelled)):
                 ss = self.sentencesunlabelled[k]
 
@@ -1307,28 +1356,34 @@ class ExtractFeatures(object):
                     # Run it through all the functions that
                     # compute featurs before the candidate position
 
-                    features_for_pos += self.ft_prec_by_transword(s, i)
-                    features_for_pos += self.ft_wh_word(s, i)
-                    features_for_pos += self.ft_foll_by_transword(s, i)
-
-                    features_for_pos += self.ft_rep_words(s, i)
-                    features_for_pos += self.ft_end_of_sent(s,i)
+                    # Word level features 0 - 21 indices
                     features_for_pos += self.ft_beg_of_sent(s,i)
-                    features_for_pos += self.ft_foll_by_conj(s,i)
+                    features_for_pos += self.ft_end_of_sent(s,i)
+                    features_for_pos += self.ft_prec_by_punc(s,i)
+                    features_for_pos += self.ft_foll_by_punc(s,i)
 
-                    #features_for_pos += self.ft_prec_by_ne(ss,i)
-                    #features_for_pos += self.ft_foll_by_ne(ss,i)
+                    # Grammatical features 22 - 27
                     features_for_pos += self.ft_nndepthat(ss,i)
                     features_for_pos += self.ft_vbdepthat(ss,i)
                     features_for_pos += self.ft_nounandnoun(ss,i)
-                    features_for_pos += self.ft_prec_by_punc(s,i)
+                    features_for_pos += self.ft_junction_of_dep_facts(ss, i)
+                    features_for_pos += self.ft_foll_by_sent(ss, i)
+                    features_for_pos += self.ft_junction_of_inf_stmts(ss, i)
+
+                    # Linguistic features 27 - 297
+
+                    features_for_pos += self.ft_prec_by_transword(s, i)
+                    features_for_pos += self.ft_wh_word(s, i)
+                    features_for_pos += self.ft_foll_by_transword(s, i)
+                    features_for_pos += self.ft_rep_words(s, i)
+                    features_for_pos += self.ft_foll_by_conj(s,i)
                     features_for_pos += self.ft_foll_by_exwords(s,i)
                     features_for_pos += self.ft_prec_by_exwords(s,i)
                     features_for_pos += self.ft_set_of_all_trans(s,i)
                     features_for_pos += self.ft_temp_connec_in_sent(s,i)
-                    features_for_pos += self.ft_junction_of_dep_facts(ss, i)
-                    features_for_pos += self.ft_foll_by_sent(ss, i)
-                    features_for_pos += self.ft_junction_of_inf_stmts(ss, i)
+
+                    #features_for_pos += self.ft_prec_by_ne(ss,i)
+                    #features_for_pos += self.ft_foll_by_ne(ss,i)
                     features_for_sent.append(features_for_pos)
                 all_featuresunlabelled[ss] = features_for_sent
                 # for i in range(len(words)):

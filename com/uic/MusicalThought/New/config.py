@@ -1,6 +1,7 @@
 [init]
 
 # final full train corpus. Combines both the first and second set
+#trainfile = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/Annotated/corpus1025.txt
 trainfile = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/labelledfullcorpus.txt
 #trainfile = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/Annotated/corpus1025.txt
 #trainfile = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/sappa.txt
@@ -8,9 +9,10 @@ trainfile = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/c
 #trainfile = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/allcorpuses.txt
 #trainfile = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/labelledsecondset/labelledsecondsetfullfixed.txt
 
-#testfile= /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/Annotated/corpus1025.txt
+#testfile= /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/Annotated/corpus1025fixed.txt
+testfile = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/LabelledFirstSet/allfiles/corpus1025fixed.txt
 #testfile = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/sappa.txt
-testfile = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/processed/WhyImakerobotsthesizeofagrainofsize.txt
+#testfile = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/processed/WhyImakerobotsthesizeofagrainofsize.txt
 
 #unlabelled corpus
 unlabelled = /Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/corpus/unlabelledcorpusfullfixed.txt
@@ -26,9 +28,9 @@ classifier=/Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/St
 tagger=/Users/vignesh/Documents/Phd/Courses/fall15/CS521SNLP/ClassProject/StanfordNERTagger/stanford-ner-2015-04-20/stanford-ner.jar
 
 [CV]
-cv = 1
+cv = 0
 perclass = 1
-featgroupres = 0
+featgroupres = 1
 
 # For LU learning
 [LU]
