@@ -59,7 +59,7 @@ class Sentence(object):
         self.st = st
         self.set_orig_sent()
         self.set_pos_tags()
-        self.set_dep()
+        #self.set_dep()
         #self.set_ner()
         #self.set_candidate_pos()
         self.set_class_labels()
@@ -109,7 +109,7 @@ class Sentence(object):
         try:
             result = loads(server.parse(s)) # This generates the dependencies
         except RPCInternalError:
-            raise 'Corenlp server is not available'
+            print 'Corenlp server is not available'
             return
         dependencies = []
         try:

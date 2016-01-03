@@ -83,9 +83,13 @@ class LearnAndClassify(object):
     3. Grammatical features
     below are index positions for each of the feature groups
     """
-    lingindices = [0, 1, 2,3,6,11,12,13,14,15,16,17]
-    wlindices = [4,5,10]
-    gramindices = [7,8,9]
+    #lingindices = [0, 1, 2,3,6,11,12,13,14,15,16,17]
+    #wlindices = [4,5,10]
+    #gramindices = [7,8,9]
+
+    wlindices = range(0,22)
+    gramindices = [22, 23, 24, 25, 26, 27]
+    lingindices = range(28,298)
 
     def __init__(self):
         self.sentences = pickle.load(open('Sentences.pickle'))
@@ -100,13 +104,10 @@ class LearnAndClassify(object):
 
         # correlation coefficient or feature significance
         #self.get_featuregroup_significance()
-
-
         #classification results
         self.cv = self.config.get('CV','cv')
         self.lu = self.config.get('LU','lu')
         if self.cv.strip(' ') == '0':
-
             #
             if self.lu.strip(' \r\n') == '1':
                 self.gen_semisup_data()
@@ -114,14 +115,14 @@ class LearnAndClassify(object):
                 self.get_lu_results_on_test()
                 return
 
-            # self.create_svm_model()
-            # self.create_nb_mode()
-            # self.create_rf_model()
-            # self.create_lr_model()
+            self.create_svm_model()
+            self.create_nb_mode()
+            self.create_rf_model()
+            self.create_lr_model()
             self.create_sgd_model()
-            # self.create_adaboost_model()
-            # self.create_gb_model()
-            # self.create_random_model()
+            self.create_adaboost_model()
+            self.create_gb_model()
+            self.create_random_model()
             self.create_dummy_model()
             self.fit_model_on_test()
         else:
@@ -499,13 +500,13 @@ class LearnAndClassify(object):
         # Getting accuracy scores for crossvalidated
         # and train test paradigms based on the setting
 
-        # ypred_svm = self.model.predict(self.testdata['X'])
-        # ypred_rf = self.modelrf.predict(self.testdata['X'])
-        # ypred_lr = self.modellr.predict(self.testdata['X'])
-        # ypred_gb = self.modelgb.predict(self.testdata['X'])
-        # ypred_ada = self.modelada.predict(self.testdata['X'])
+        ypred_svm = self.model.predict(self.testdata['X'])
+        ypred_rf = self.modelrf.predict(self.testdata['X'])
+        ypred_lr = self.modellr.predict(self.testdata['X'])
+        ypred_gb = self.modelgb.predict(self.testdata['X'])
+        ypred_ada = self.modelada.predict(self.testdata['X'])
         ypred_sgd = self.modelsgd.predict(self.testdata['X'])
-        # ypred_nb = self.modelnb.predict(self.testdata['X'])
+        ypred_nb = self.modelnb.predict(self.testdata['X'])
         ypred_random = self.modelrandom.predict(self.testdata['X'])
 
 
@@ -560,35 +561,46 @@ class LearnAndClassify(object):
         # print classification_report(self.testdata['Y'], ypred_sgd)
         #
         # report = classification_report(self.testdata['Y'], ypred_sgd)
-        # results = self.get_results_from_classreport(report)
-        # classlabels = ['/','//','NM']
-        # for l in classlabels:
-        #
-        #     # get the results
-        #     res = results.get(l) # Class specific results
-        #     f1 = res.get('f1')
-        #     print 'F1 for '+l+': ' + str(f1)
-        #
-        #
-        # print '===================================\n'
-        # # get the balanced accuracy
-        # """
-        # We can get balanced accuracy by assuming the
-        # class of interest as positive and the other classes as negative
-        # """
-        # balaccuracies = {}
-        # df = {'ypred' : ypred_sgd, 'y' : self.testdata['Y']}
-        # df = pd.DataFrame(df)
-        # rdf = com.convert_to_r_dataframe(df)
-        # base = importr('base')
-        # caret = importr('caret')
-        # ypredfact = base.factor(rdf[0])
-        # ytruefact = base.factor(rdf[1])
-        # mat = caret.confusionMatrix(ytruefact, ypredfact)
-        # s = com.convert_robj(mat[3])
-        # cc = s['Balanced Accuracy']
-        # cc = dict(cc)
-        # print cc
+
+        classifiers = [ypred_svm, ypred_sgd,ypred_rf, ypred_lr, ypred_gb, ypred_ada]
+        classifnames = ['SVM', 'SGD','RandomForest','LogisticRegression','GB','ADA']
+        for i in range(len(classifiers)):
+
+            ypred = classifiers[i]
+            classifiername = classifnames[i]
+            print 'Train test Classification report for : '+ classifiername
+            report = classification_report(self.testdata['Y'], ypred)
+            results = self.get_results_from_classreport(report)
+            classlabels = ['/','//','NM']
+            for l in classlabels:
+
+                # get the results
+                res = results.get(l) # Class specific results
+                f1 = res.get('f1')
+                print 'F1 for '+l+': ' + str(f1)
+
+
+            print '===================================\n'
+            # get the balanced accuracy
+            """
+            We can get balanced accuracy by assuming the
+            class of interest as positive and the other classes as negative
+            """
+            balaccuracies = {}
+            df = {'ypred' : ypred, 'y' : self.testdata['Y']}
+            df = pd.DataFrame(df)
+            rdf = com.convert_to_r_dataframe(df)
+            base = importr('base')
+            caret = importr('caret')
+            ypredfact = base.factor(rdf[0])
+            ytruefact = base.factor(rdf[1])
+            mat = caret.confusionMatrix(ytruefact, ypredfact)
+            s = com.convert_robj(mat[3])
+            cc = s['Balanced Accuracy']
+            cc = dict(cc)
+            print cc
+            print '===================================\n'
+
 
         # Classification report for random model
         print 'Classification report for Random  model'
@@ -983,9 +995,11 @@ class LearnAndClassify(object):
         # Random classifier
         random_model = DummyClassifier(strategy='stratified')
 
-        classifnames = ['LR','SVM', 'RF', 'SGD', 'NB', 'ADA', 'Random']
-        classifiers = [lr_model, svm_model, rf_model, sgd_model, mnb, ada_model, random_model]
+        #classifnames = ['LR','SVM', 'RF', 'SGD', 'NB', 'ADA', 'Random']
+        #classifiers = [lr_model, svm_model, rf_model, sgd_model, mnb, ada_model, random_model]
 
+        classifnames = ['GB']
+        classifiers = [gb_model]
 
         # Get train and test data
 
@@ -1100,8 +1114,8 @@ class LearnAndClassify(object):
         # classifnames = ['LR', 'SVM', 'RF', 'MNB','GB','Random']
         # classifiers = [lr_model, svm_model, rf_model, mnb, gb_model, random_model]
 
-        classifnames = ['SGD', 'Random']
-        classifiers = [sgd_model, random_model]
+        classifnames = ['SGD']
+        classifiers = [sgd_model]
         # Get train and test data
         X = self.traindata['X']
         y = self.traindata['Y']
@@ -1109,48 +1123,69 @@ class LearnAndClassify(object):
         # Code for feature group
         groups = ['Linguistic','Word','Grammatical', 'LingandWord', 'LingandGram', 'WordandGram', 'All']
         Xlist = []
+
+        def getfeatdata(trainx, indices):
+            temp = []
+            for i in range(len(trainx)):
+                example = trainx[i]
+                temp2 = []
+                for j in range(len(indices)):
+                    temp2.append(example[j])
+                #example = [example[j] for j in range(len(example)) if j in indices]
+                temp.append(temp2)
+            return temp
+
+
         getdataforfeat = lambda x,y : [x[i] for i in y] # x is the training example and y is the indices
 
         # Linguistic features
-        mapfunc = partial(getdataforfeat, y = self.lingindices)
-        Xling = map(mapfunc, X)
+        #mapfunc = partial(getdataforfeat, y = self.lingindices)
+        #Xling = map(mapfunc, X)
+        Xling = getfeatdata(X, self.lingindices)
         Xlist.append(Xling)
 
         #Word level features
-        mapfunc = partial(getdataforfeat, y = self.wlindices)
-        Xword = map(mapfunc, X)
+        #mapfunc = partial(getdataforfeat, y = self.wlindices)
+        #Xword = map(mapfunc, X)
+        Xword = getfeatdata(X, self.wlindices)
         Xlist.append(Xword)
 
         #Grammatical features
-        mapfunc = partial(getdataforfeat, y = self.gramindices)
-        Xgram = map(mapfunc, X)
+        #mapfunc = partial(getdataforfeat, y = self.gramindices)
+        #Xgram = map(mapfunc, X)
+        Xgram = getfeatdata(X, self.gramindices)
         Xlist.append(Xgram)
 
         # Linguistic and Word level combination
-        mapfunc = partial(getdataforfeat, y = self.lingindices + self.wlindices)
-        Xlingword = map(mapfunc, X)
+        #mapfunc = partial(getdataforfeat, y = self.lingindices + self.wlindices)
+        #Xlingword = map(mapfunc, X)
+        Xlingword = getfeatdata(X, self.lingindices + self.wlindices)
         Xlist.append(Xlingword)
 
         # Linguistic and Grammaatical combination
-        mapfunc = partial(getdataforfeat, y = self.lingindices + self.gramindices)
-        Xlinggram = map(mapfunc, X)
+        #mapfunc = partial(getdataforfeat, y = self.lingindices + self.gramindices)
+        #Xlinggram = map(mapfunc, X)
+        Xlinggram = getfeatdata(X, self.lingindices + self.gramindices)
         Xlist.append(Xlinggram)
 
         # Word level and grammatical combination
-        mapfunc = partial(getdataforfeat, y = self.gramindices + self.wlindices)
-        Xwordgram = map(mapfunc, X)
+        #mapfunc = partial(getdataforfeat, y = self.gramindices + self.wlindices)
+        #Xwordgram = map(mapfunc, X)
+        Xwordgram = getfeatdata(X, self.gramindices + self.wlindices)
         Xlist.append(Xwordgram)
 
         # All features
 
-        mapfunc = partial(getdataforfeat, y = self.gramindices + self.wlindices + self.lingindices)
-        Xall = map(mapfunc, X)
+        #mapfunc = partial(getdataforfeat, y = self.gramindices + self.wlindices + self.lingindices)
+        #Xall = map(mapfunc, X)
+        Xall = getfeatdata(X, self.gramindices + self.wlindices + self.lingindices)
         Xlist.append(Xall)
 
         # Generate crossvalidated results here
         for i in range(len(groups)):
 
             X = Xlist[i] # redefining X here for getting
+            print len(X)
             allpredictions = []
             print 'Getting results for the ' + groups[i] +' group'
             for j in range(len(classifiers)):
